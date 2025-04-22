@@ -8,6 +8,18 @@ export class GameClient {
   players: Map<string, Player> = new Map();
   currentPlayer: Player | null = null;
   eventListeners: Map<string, GameEventCallback[]> = new Map();
+  
+  // Movement state
+  movementKeys: {[key: string]: boolean} = {
+    w: false,
+    a: false,
+    s: false,
+    d: false
+  };
+  moveSpeed: number = 10;
+  isMoving: boolean = false;
+  lastMovementUpdate: number = 0;
+  movementUpdateInterval: number = 30; // Send updates every 30ms for smoother movement
 
   constructor() {
     // Connect to the server
@@ -79,6 +91,77 @@ export class GameClient {
       this.socket.emit('move', { x, y });
       this.triggerEvent('playerMoved', { id: this.currentPlayer.id, x, y });
     }
+  }
+  
+  // For WASD movement
+  startMovement() {
+    if (!this.isMoving && this.currentPlayer) {
+      this.isMoving = true;
+      this.processMovement();
+    }
+  }
+  
+  stopMovement() {
+    this.isMoving = false;
+  }
+  
+  setMovementKey(key: string, isPressed: boolean) {
+    // Only handle WASD keys
+    if (key in this.movementKeys) {
+      this.movementKeys[key] = isPressed;
+      
+      // Start or stop movement based on any key being pressed
+      const anyKeyPressed = Object.values(this.movementKeys).some(pressed => pressed);
+      
+      if (anyKeyPressed) {
+        this.startMovement();
+      } else {
+        this.stopMovement();
+      }
+    }
+  }
+  
+  processMovement() {
+    if (!this.isMoving || !this.currentPlayer) return;
+    
+    const now = Date.now();
+    if (now - this.lastMovementUpdate < this.movementUpdateInterval) {
+      // Not time to update yet, schedule next frame
+      requestAnimationFrame(() => this.processMovement());
+      return;
+    }
+    
+    // Calculate movement delta
+    let dx = 0;
+    let dy = 0;
+    
+    if (this.movementKeys.w) dy -= this.moveSpeed;
+    if (this.movementKeys.s) dy += this.moveSpeed;
+    if (this.movementKeys.a) dx -= this.moveSpeed;
+    if (this.movementKeys.d) dx += this.moveSpeed;
+    
+    // Normalize diagonal movement to avoid faster diagonal speed
+    if (dx !== 0 && dy !== 0) {
+      // Pythagoras normalization
+      const factor = this.moveSpeed / Math.sqrt(dx * dx + dy * dy);
+      dx *= factor;
+      dy *= factor;
+    }
+    
+    if (dx !== 0 || dy !== 0) {
+      // Calculate new position
+      const newX = Math.max(20, Math.min(780, this.currentPlayer.x + dx));
+      const newY = Math.max(20, Math.min(580, this.currentPlayer.y + dy));
+      
+      // Only update if position actually changed
+      if (newX !== this.currentPlayer.x || newY !== this.currentPlayer.y) {
+        this.movePlayer(newX, newY);
+        this.lastMovementUpdate = now;
+      }
+    }
+    
+    // Continue movement in next frame
+    requestAnimationFrame(() => this.processMovement());
   }
 
   // Event system to allow components to respond to game events

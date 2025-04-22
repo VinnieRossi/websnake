@@ -117,29 +117,52 @@ export default function Game() {
     };
   }, [gameClient, joined]);
 
-  // Handle movement
+  // Handle keyboard movement with WASD
   useEffect(() => {
-    if (!canvasRef.current || !gameClient || !joined) return;
+    if (!gameClient || !joined) return;
 
-    const canvas = canvasRef.current;
-
-    const handleClick = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      // Get click position relative to canvas
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+    // Function to handle key press
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Convert key to lowercase for consistency
+      const key = e.key.toLowerCase();
       
-      // Apply scaling to get accurate coordinates regardless of canvas display size
-      const x = (e.clientX - rect.left) * scaleX;
-      const y = (e.clientY - rect.top) * scaleY;
-      
-      gameClient.movePlayer(x, y);
+      // Only handle WASD keys
+      if (['w', 'a', 's', 'd'].includes(key)) {
+        // Prevent default actions like scrolling
+        e.preventDefault();
+        gameClient.setMovementKey(key, true);
+      }
     };
 
-    canvas.addEventListener('click', handleClick);
+    // Function to handle key release
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      
+      if (['w', 'a', 's', 'd'].includes(key)) {
+        gameClient.setMovementKey(key, false);
+      }
+    };
 
+    // When tab/window loses focus, stop all movement
+    const handleBlur = () => {
+      gameClient.movementKeys.w = false;
+      gameClient.movementKeys.a = false;
+      gameClient.movementKeys.s = false;
+      gameClient.movementKeys.d = false;
+      gameClient.stopMovement();
+    };
+
+    // Add event listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+
+    // Cleanup
     return () => {
-      canvas.removeEventListener('click', handleClick);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+      gameClient.stopMovement();
     };
   }, [gameClient, joined]);
 
@@ -197,7 +220,7 @@ export default function Game() {
             className="bg-gray-800 rounded-lg w-full"
             style={{ aspectRatio: '4/3' }}
           />
-          <p className="text-white mt-2">Click anywhere to move</p>
+          <p className="text-white mt-2">Use WASD keys to move</p>
         </div>
         <div className="w-64 bg-gray-800 p-4 rounded-lg">
           <h2 className="text-xl font-bold text-white mb-2">Players ({players.length})</h2>
