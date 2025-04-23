@@ -21,6 +21,7 @@ interface Player {
   invincibleUntil: number;
   score: number;
   trail: TrailSegment[];
+  isDead: boolean;
 }
 
 export class GameClient {
@@ -91,7 +92,7 @@ export class GameClient {
       players.forEach((player) => {
         // Ensure the player has the invincibleUntil property
         if (!("invincibleUntil" in player)) {
-          player.invincibleUntil = 0; // No invincibility for existing players by default
+          (player as any).invincibleUntil = 0;
         }
 
         // Initialize trail if it doesn't exist
@@ -110,7 +111,7 @@ export class GameClient {
 
       // Ensure the player has the invincibleUntil property
       if (!("invincibleUntil" in player)) {
-        player.invincibleUntil = Date.now() + 2000; // 2 seconds initial invincibility
+        (player as any).invincibleUntil = Date.now() + 2000;
       }
 
       // Initialize trail if it doesn't exist

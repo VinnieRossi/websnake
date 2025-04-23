@@ -20,8 +20,9 @@ export class SpriteRenderer {
     isMoving: boolean,
     isInvincible: boolean = false,
     isVisible: boolean = true,
-    color: string = "#3498db", // Default to blue if no color provided
-    trail: { x: number; y: number; timestamp: number }[] = [] // Trail segments
+    playerId: string,
+    color: string = "#3498db",
+    trail: { x: number; y: number; timestamp: number }[] = []
   ) {
     // First draw the light trail if it exists - pass invincibility and visibility state
     if (trail && trail.length > 0) {

@@ -324,8 +324,7 @@ export default function Game() {
 
         // Check if the player has the invincibleUntil property
         if (!("invincibleUntil" in player)) {
-          // Initialize it if it doesn't exist
-          player.invincibleUntil = 0;
+          (player as any).invincibleUntil = 0;
         }
 
         // Debug only for major changes
