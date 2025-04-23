@@ -28,7 +28,7 @@ export class GameClient {
   players: Map<string, Player> = new Map();
   currentPlayer: Player | null = null;
   eventListeners: Map<string, GameEventCallback[]> = new Map();
-  private eventHandlers: { [key: string]: ((data: unknown) => void)[] } = {};
+  private eventHandlers: { [key: string]: ((data: any) => void)[] } = {};
 
   // Movement state
   movementKeys: { [key: string]: boolean } = {
@@ -997,14 +997,14 @@ export class GameClient {
   }
 
   // Event system to allow components to respond to game events
-  on(event: string, callback: (data: unknown) => void) {
+  on(event: string, callback: (data: any) => void) {
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
     }
     this.eventHandlers[event].push(callback);
   }
 
-  off(event: string, callback: (data: unknown) => void) {
+  off(event: string, callback: (data: any) => void) {
     if (this.eventHandlers[event]) {
       const callbacks = this.eventHandlers[event] || [];
       const index = callbacks.indexOf(callback);
