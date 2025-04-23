@@ -1,7 +1,43 @@
-import { NextResponse } from "next/server";
+import { Server as SocketIOServer } from "socket.io";
+import { NextRequest } from "next/server";
+import { GameServer } from "@/game/server/GameServer";
 
-// This route isn't used for HTTP requests
-// It's a placeholder for when we implement the WebSocket connection
-export async function GET() {
-  return NextResponse.json({ message: "WebSocket server endpoint" });
+// Store for active socket connections
+let io: SocketIOServer;
+let gameServer: GameServer;
+
+export async function GET(req: NextRequest) {
+  // This is required for WebSocket upgrade
+  const { socket, response } = await (req as any).nextUrl;
+  
+  if (!socket) {
+    return new Response("WebSocket connection required", { status: 400 });
+  }
+
+  // Initialize socket.io server on first connection
+  if (!io) {
+    const socketIO = new SocketIOServer({
+      path: "/api/socket",
+      addTrailingSlash: false,
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+      },
+    });
+    
+    io = socketIO;
+    
+    // Create game server with the socket.io instance
+    gameServer = new GameServer(io);
+    console.log("GameServer initialized in Edge runtime");
+  }
+
+  // Attach the server to the event
+  (io as any).attachWebSocket(socket, req, response);
+  
+  // WebSocket connections need to stay alive
+  return new Response(null, {
+    status: 101,
+    webSocket: socket,
+  });
 }

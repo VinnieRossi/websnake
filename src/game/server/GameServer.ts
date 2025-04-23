@@ -37,15 +37,24 @@ export class GameServer {
   players: Map<string, Player> = new Map();
   io: SocketIOServer;
 
-  constructor(server: http.Server) {
-    this.io = new SocketIOServer(server, {
-      cors: {
-        origin: "*",
-        methods: ["GET", "POST"],
-      },
-    });
+  // Accept either a HTTP server (for local dev) or a socket.io server (for Vercel)
+  constructor(serverOrIo: http.Server | SocketIOServer) {
+    if ('on' in serverOrIo && typeof serverOrIo.on === 'function' && 'emit' in serverOrIo) {
+      // This is already a socket.io server (for Vercel deployment)
+      this.io = serverOrIo as SocketIOServer;
+      console.log("GameServer using provided Socket.IO instance");
+    } else {
+      // This is an HTTP server (for local development)
+      this.io = new SocketIOServer(serverOrIo as http.Server, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"],
+        },
+      });
+      console.log("GameServer created new Socket.IO instance from HTTP server");
+    }
 
-    console.log("GameServer constructor called, setting up handlers");
+    console.log("GameServer initialized, setting up handlers");
     this.setupSocketHandlers();
   }
 

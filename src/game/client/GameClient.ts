@@ -51,9 +51,24 @@ export class GameClient {
   collisionRadius: number = 45; // Collision detection radius (pixels) - making it much larger for easier testing
 
   constructor() {
-    // Connect to the server
-    this.socket = io(window.location.origin);
+    // Connect to the server with explicit path for Vercel compatibility
+    this.socket = io(window.location.origin, {
+      path: "/api/socket",
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      transports: ["websocket"]
+    });
+    
     this.setupSocketListeners();
+
+    // Log connection status
+    this.socket.on("connect", () => {
+      console.log("Connected to game server with ID:", this.socket.id);
+    });
+    
+    this.socket.on("connect_error", (err) => {
+      console.error("Socket connection error:", err);
+    });
 
     // Start collision checking immediately
     this.startCollisionChecking();
