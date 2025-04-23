@@ -101,6 +101,8 @@ export default function Game() {
         username: string;
         killedUsername?: string;
         deathType?: string;
+        isSelfKill?: boolean; // Added this field to receive explicit self-kill flag
+        killerIdMatchesVictimId?: boolean; // Added for additional self-kill checking
       }) => {
         console.log("Game: scoreUpdated event received", data);
         updatePlayersList(client);
@@ -116,12 +118,16 @@ export default function Game() {
         // This is the source of truth about whether the kill was a suicide
         const isSelfKill = data.isSelfKill === true;
         
-        console.log("Kill notification parsed values:", {
+        // For additional debugging: log more detailed self-kill detection info
+        console.log("Kill notification details:", {
           killer: killerName, 
           victim: victimName, 
           type: data.deathType, 
-          isSelfKill: isSelfKill,
-          areNamesEqual: killerName === victimName
+          isSelfKillFlag: data.isSelfKill === true,
+          areNamesEqual: killerName === victimName,
+          // Additional checks we can use for debugging
+          areIdsEqual: data.id === data.killedBy,
+          finalDecision: isSelfKill
         });
         
         // Generate a fun, randomized message based on death type
@@ -140,22 +146,22 @@ export default function Game() {
         } else if (data.deathType === "self-trail") {
           // Self trail collision messages
           const selfTrailMessages = [
-            `${killerName} got tangled in their own trail. Awkward!`,
-            `${killerName} played themselves in the most literal way!`,
-            `${killerName} made a maze they couldn't solve!`,
-            `${killerName} became their own worst enemy!`,
-            `${killerName} tried to bite their own tail. It didn't end well!`
+            `${victimName} got tangled in their own trail. No points for self-destruction!`,
+            `${victimName} played themselves in the most literal way!`,
+            `${victimName} made a maze they couldn't solve!`,
+            `${victimName} became their own worst enemy!`,
+            `${victimName} tried to bite their own tail. That's not how you win!`
           ];
           message = selfTrailMessages[Math.floor(Math.random() * selfTrailMessages.length)];
         } else {
           // Standard player collision messages
           if (isSelfKill) {
             const selfCollisionMessages = [
-              `${killerName} eliminated themselves in confusion!`,
-              `${killerName} defeated their own existence! How philosophical!`,
-              `${killerName} ragequit in the most dramatic way possible!`,
-              `${killerName} decided to restart from scratch!`,
-              `${killerName} accidentally pressed the self-destruct button!`
+              `${victimName} eliminated themselves in confusion! No points awarded.`,
+              `${victimName} defeated their own existence! How philosophical!`,
+              `${victimName} ragequit in the most dramatic way possible!`,
+              `${victimName} decided to restart from scratch! Self-kills don't count for points.`,
+              `${victimName} accidentally pressed the self-destruct button!`
             ];
             message = selfCollisionMessages[Math.floor(Math.random() * selfCollisionMessages.length)];
           } else {

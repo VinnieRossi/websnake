@@ -210,52 +210,127 @@ export class GameServer {
             isSelf: data.killedBy === socket.id
         });
         
-        // If killed by another player, give them a point
-        // Get the correct killer information
-        const isSelfKill = data.isSelfKill === true;
+        // First, determine if this is a self-kill using multiple comprehensive checks:
+        // 1. Explicit isSelfKill flag from client (primary source of truth)
+        // 2. Same ID for killer and victim
+        // 3. Self-trail or self collision type
+        // 4. Check if killedBy is missing or matches socket.id
+        // 5. Use the redundant flags we added for additional verification
+        const isSelfKill = data.isSelfKill === true || 
+                          data.killedBy === socket.id || 
+                          data.collisionType === "self-trail" || 
+                          data.collisionType === "self" ||
+                          !data.killedBy || // Missing killedBy should count as self-kill
+                          data.killerIsDeadPlayer === true ||
+                          data.deadPlayerIsKiller === true ||
+                          data.killerIdMatchesVictimId === true;
         
-        // Different logic based on self vs. other kill
-        if (data.killedBy && !isSelfKill) {
+        console.log("SELF-KILL DETECTION:", {
+          isSelfKillFlag: data.isSelfKill === true,
+          sameIds: data.killedBy === socket.id,
+          selfTrailType: data.collisionType === "self-trail",
+          selfType: data.collisionType === "self",
+          missingKilledBy: !data.killedBy,
+          // Additional flags from our enhanced detection
+          killerIsDeadPlayer: data.killerIsDeadPlayer === true,
+          deadPlayerIsKiller: data.deadPlayerIsKiller === true,
+          killerIdMatchesVictimId: data.killerIdMatchesVictimId === true,
+          // Final decision
+          finalDecision: isSelfKill
+        });
+        
+        // MOST CRITICAL CHECK: Is the killer and victim the same player?
+        // This is the absolute definitive check before any scoring logic
+        const samePlayer = data.killedBy === socket.id;
+        
+        console.log("DEFINITIVE SELF-KILL CHECK:", {
+          killerID: data.killedBy,
+          victimID: socket.id,
+          areSame: samePlayer,
+          originalSelfKillFlag: isSelfKill
+        });
+        
+        if (samePlayer) {
+          // This is DEFINITELY a self-kill - completely override any other logic
+          console.log(`DEFINITIVE SELF-KILL by ${player.username} - NO POINTS AWARDED`);
+          
+          // Send notification with explicitly no score change
+          const selfKillData = {
+            id: socket.id,
+            score: player.score, // Keep score exactly the same
+            username: player.username,
+            killedUsername: player.username,
+            deathType: deathType,
+            isSelfKill: true // Always mark as self-kill
+          };
+          
+          console.log("EMITTING DEFINITIVE SELF-KILL NOTIFICATION:", selfKillData);
+          this.io.emit("scoreUpdated", selfKillData);
+        }
+        // Not a self-kill (different players)
+        else if (data.killedBy) {
           // This is when someone else killed the player
           const killer = this.players.get(data.killedBy);
           if (killer) {
-            // Award a point to the killer
-            killer.score += 1;
-            this.players.set(data.killedBy, killer);
-            
-            console.log(`Awarding kill to ${killer.username} (ID: ${killer.id})`);
-            
-            // For extra debugging, log all relevant data we're about to send
-            const killData = {
-              id: data.killedBy,
-              score: killer.score,
-              username: killer.username,  // Killer's username
-              killedUsername: killedUsername, // Victim's username
-              deathType: deathType,
-              isSelfKill: false // Explicitly mark as not a self-kill
-            };
-            
-            console.log("EMITTING SCORE UPDATE WITH DATA:", killData);
-            
-            // Include the death type and both usernames in the score update
-            this.io.emit("scoreUpdated", killData);
+            // Last chance comprehensive check
+            const anyPossibleSelfKill = 
+              isSelfKill || // Any earlier self-kill detection
+              killer.id === socket.id || // Redundant ID check
+              data.isSelfKill === true || // Explicit flag
+              data.killerIsDeadPlayer === true || // Additional flag
+              data.deadPlayerIsKiller === true || // Additional flag
+              data.killerIdMatchesVictimId === true; // Additional flag
+              
+            if (anyPossibleSelfKill) {
+              console.log("FINAL SAFETY CHECK CAUGHT POTENTIAL SELF-KILL - NO POINTS AWARDED");
+              // Send notification with no score change
+              const safetyKillData = {
+                id: data.killedBy,
+                score: killer.score, // Keep score exactly the same (no increment)
+                username: killer.username,
+                killedUsername: killedUsername,
+                deathType: deathType,
+                isSelfKill: true // Mark as self-kill for message handling
+              };
+              console.log("EMITTING SAFETY-CAUGHT SELF-KILL:", safetyKillData);
+              this.io.emit("scoreUpdated", safetyKillData);
+            } else {
+              // ONLY NOW award points - 100% confirmed not a self-kill
+              killer.score += 1;
+              this.players.set(data.killedBy, killer);
+              console.log(`LEGITIMATE KILL - Awarding point to ${killer.username} (ID: ${killer.id})`);
+              
+              // For logging, create the kill data
+              const killData = {
+                id: data.killedBy,
+                score: killer.score,
+                username: killer.username,
+                killedUsername: killedUsername,
+                deathType: deathType,
+                isSelfKill: false // Definitely not a self-kill
+              };
+              
+              console.log("EMITTING LEGITIMATE KILL NOTIFICATION:", killData);
+              this.io.emit("scoreUpdated", killData);
+            }
           } else {
-            console.log(`Killer not found for ID: ${data.killedBy}`);
+            console.log(`Killer not found for ID: ${data.killedBy} - no points awarded`);
           }
         } else {
-          // This is a self-kill, send a special notification
-          console.log(`Self-kill by ${player.username} (Death type: ${deathType})`);
+          // This is a self-kill, don't award any points
+          console.log(`Self-kill by ${player.username} (Death type: ${deathType}) - NO POINTS AWARDED`);
           
+          // Include the death notification but don't increment score
           const selfKillData = {
             id: socket.id,
-            score: player.score,
+            score: player.score, // Keep the current score (no increment)
             username: player.username, // Both killer and victim are the same person
             killedUsername: player.username, // The victim is the same as the killer for self-kills
             deathType: deathType,
             isSelfKill: true // Explicitly mark as a self-kill
           };
           
-          console.log("EMITTING SELF-KILL DATA:", selfKillData);
+          console.log("EMITTING SELF-KILL DATA (NO POINTS):", selfKillData);
           
           this.io.emit("scoreUpdated", selfKillData);
         }

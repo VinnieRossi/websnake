@@ -603,12 +603,31 @@ export class GameClient {
           // Clear trail immediately on client side
           this.currentPlayer.trail = [];
 
-          // Tell server I died
+          // Critical self-kill check - is this a collision with self?
+          const isCollisionWithSelf = player.id === this.currentPlayer.id;
+          
+          console.log("PLAYER COLLISION CHECK:", {
+            victim: this.currentPlayer.username,
+            victimId: this.currentPlayer.id,
+            killer: player.username,
+            killerId: player.id,
+            isSelfCollision: isCollisionWithSelf
+          });
+
+          // Tell server I died - ensure self-kills are properly marked
           this.socket.emit("killPlayer", {
             id: this.currentPlayer.id,
-            killedBy: player.id,
+            // CRITICAL: For self-kills, we force killedBy to be the current player ID
+            killedBy: isCollisionWithSelf ? this.currentPlayer.id : player.id,
+            killerUsername: player.username,
+            killedUsername: this.currentPlayer.username,
             forced: true,
-            collisionType: "player"
+            collisionType: isCollisionWithSelf ? "self" : "player",
+            isSelfKill: isCollisionWithSelf,
+            // Add redundant flags
+            killerIsDeadPlayer: isCollisionWithSelf,
+            deadPlayerIsKiller: isCollisionWithSelf,
+            selfKillConfirmed: isCollisionWithSelf
           });
 
           console.log("Death message sent to server");
@@ -682,27 +701,38 @@ export class GameClient {
           // Clear trail immediately on client side
           this.currentPlayer.trail = [];
           
-          console.log("TRAIL KILL DETAILS:", {
+          // CRITICAL DEBUG: This is where self-kill detection happens for trail kills
+          // Self-collision means hitting your own trail - this should NEVER award points
+          const definitiveSelfKill = player.id === this.currentPlayer.id;
+          
+          console.log("DEFINITIVE TRAIL KILL CHECK:", {
             victim: this.currentPlayer.username,
             victimId: this.currentPlayer.id,
             killer: player.username,
             killerId: player.id,
-            isSelfKill: isSelfCollision
+            isSamePerson: definitiveSelfKill,
+            collisionType: definitiveSelfKill ? "SELF-TRAIL" : "OTHER-TRAIL"
           });
           
           // Tell server - include both killer and victim usernames explicitly
           // CRITICAL: For trail collisions, the killer is the TRAIL OWNER (player)
           this.socket.emit("killPlayer", {
             id: this.currentPlayer.id,                // ID of the player who died
-            killedBy: player.id,                      // ID of the player who killed (trail owner)
+            killedBy: definitiveSelfKill ? this.currentPlayer.id : player.id, // CRITICAL: For self-kills, killedBy MUST equal victim ID
             killerUsername: player.username,          // Username of killer (trail owner)
             killedUsername: this.currentPlayer.username,
             forced: true,
-            collisionType: isSelfCollision ? "self-trail" : "trail",
-            isSelfKill: isSelfCollision,              // Only true if hitting your own trail
-            // One more time, make it extremely explicit
-            killerIsDeadPlayer: false,
-            deadPlayerIsKiller: false
+            collisionType: definitiveSelfKill ? "self-trail" : "trail",
+            isSelfKill: definitiveSelfKill,           // Make very explicit this is a self-kill
+            // Redundant flags to make self-kill detection more robust
+            killerIsDeadPlayer: definitiveSelfKill,      
+            deadPlayerIsKiller: definitiveSelfKill,     
+            killerIdMatchesVictimId: definitiveSelfKill,
+            // Extreme measures to ensure self-kill detection
+            selfKillConfirmed: definitiveSelfKill,
+            trailOwnerId: player.id,
+            victimId: this.currentPlayer.id,
+            trailOwnerEqualsVictim: player.id === this.currentPlayer.id
           });
           
           console.log("Trail collision death message sent to server");
@@ -745,18 +775,38 @@ export class GameClient {
       const killerPlayer = this.players.get(killedById);
       const killerUsername = killerPlayer ? killerPlayer.username : "Unknown";
       
-      // Check if this is truly a self-kill (same player id)
-      const isActuallySelfKill = this.currentPlayer.id === killedById;
+      // CRITICAL CHECK: Is this a collision with self?
+      // We must never grant points for killing yourself
+      const definitiveSelfKill = this.currentPlayer.id === killedById;
+      
+      console.log("DEFINITIVE COLLISION CHECK:", {
+        victim: this.currentPlayer.username,
+        victimId: this.currentPlayer.id,
+        killer: killerUsername,
+        killerId: killedById,
+        isSamePerson: definitiveSelfKill,
+        collisionType: definitiveSelfKill ? "SELF" : "OTHER-PLAYER"
+      });
       
       // Tell the server about this collision - include both killer and victim usernames
+      // CRITICAL FIX: For self-kills, we ensure killedBy = currentPlayer.id to force matching IDs
       this.socket.emit("killPlayer", {
         id: this.currentPlayer.id,
-        killedBy: killedById,
-        killerUsername: killerUsername, // Add killer username explicitly
+        killedBy: definitiveSelfKill ? this.currentPlayer.id : killedById, // CRITICAL: Force ID match for self-kills
+        killerUsername: definitiveSelfKill ? this.currentPlayer.username : killerUsername, // Use own username for self-kills
         killedUsername: this.currentPlayer.username,
-        forced: true, // Force handling the death
-        collisionType: isActuallySelfKill ? "self" : "player", // Only use 'self' if truly the same player
-        isSelfKill: isActuallySelfKill // Explicit flag for self-kills
+        forced: true, 
+        collisionType: definitiveSelfKill ? "self" : "player", 
+        isSelfKill: definitiveSelfKill, // Always mark as self-kill if IDs match
+        // Redundant flags to make self-kill detection more robust
+        killerIsDeadPlayer: definitiveSelfKill,
+        deadPlayerIsKiller: definitiveSelfKill,
+        killerIdMatchesVictimId: definitiveSelfKill,
+        // Extreme measures to ensure self-kill detection
+        selfKillConfirmed: definitiveSelfKill,
+        victimId: this.currentPlayer.id,
+        colliderId: killedById,
+        victimEqualsCollider: this.currentPlayer.id === killedById
       });
 
       // Trigger death event locally to update UI
