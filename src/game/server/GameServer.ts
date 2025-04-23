@@ -1,6 +1,13 @@
 import { Server as SocketIOServer } from "socket.io";
 import http from "http";
 
+// Trail segment interface
+export interface TrailSegment {
+  x: number;
+  y: number;
+  timestamp: number;
+}
+
 // Player data interface
 export interface Player {
   id: string;
@@ -13,6 +20,7 @@ export interface Player {
   isMoving: boolean;
   invincibleUntil: number; // Timestamp when invincibility ends (0 if not invincible)
   score: number; // Player's score (number of kills)
+  trail: TrailSegment[]; // Trail of light segments behind the player
 }
 
 export class GameServer {
@@ -49,6 +57,7 @@ export class GameServer {
           isMoving: false,
           invincibleUntil: Date.now() + 2000, // 2 seconds of initial invincibility
           score: 0, // Initialize score to 0
+          trail: [], // Initialize empty trail
         };
 
         this.players.set(socket.id, player);
@@ -75,6 +84,32 @@ export class GameServer {
       socket.on("move", (data: any) => {
         const player = this.players.get(socket.id);
         if (player) {
+          // Ensure trail array exists
+          if (!player.trail) {
+            player.trail = [];
+          }
+          
+          // Always add a trail point if player is moving (simplifying for testing)
+          if (data.isMoving) {
+            // Add new trail segment at current position
+            player.trail.push({
+              x: player.x,
+              y: player.y,
+              timestamp: Date.now()
+            });
+            
+            // Only log occasionally to reduce console spam
+            if (Math.random() < 0.01) {
+              console.log(`Server: Added trail point for ${player.username}, trail length: ${player.trail.length}`);
+            }
+            
+            // Limit trail length to prevent performance issues (keep last 40 segments)
+            if (player.trail.length > 40) {
+              player.trail = player.trail.slice(-40);
+            }
+          }
+          
+          // Update player position and state
           player.x = data.x;
           player.y = data.y;
           if (data.direction) player.direction = data.direction;
@@ -82,9 +117,12 @@ export class GameServer {
           if (data.invincibleUntil) player.invincibleUntil = data.invincibleUntil;
           
           this.players.set(socket.id, player);
+          
+          // Add trail data to the movement update
           socket.broadcast.emit("playerMoved", {
             id: socket.id,
-            ...data
+            ...data,
+            trail: player.trail
           });
         }
       });
@@ -101,10 +139,14 @@ export class GameServer {
         
         console.log(`Player ${player.username} died, initiating respawn`);
         
-        // 1. Broadcast death to everyone
+        // Determine the type of death for better notifications
+        const deathType = data.collisionType || "player";
+        
+        // 1. Broadcast death to everyone with type of death
         this.io.emit("playerDied", {
           id: socket.id,
-          username: player.username
+          username: player.username,
+          deathType: deathType
         });
         
         // 2. Respawn at center with invincibility
@@ -118,6 +160,7 @@ export class GameServer {
         player.direction = "down";
         player.isMoving = false;
         player.invincibleUntil = invincibleUntil;
+        player.trail = []; // Clear the trail on respawn
         this.players.set(socket.id, player);
         
         // 4. Tell the player they died and respawned
@@ -142,10 +185,13 @@ export class GameServer {
             killer.score += 1;
             this.players.set(data.killedBy, killer);
             
+            // Include the death type in the score update
             this.io.emit("scoreUpdated", {
               id: data.killedBy,
               score: killer.score,
-              username: killer.username
+              username: killer.username,
+              killedUsername: player.username,
+              deathType: deathType
             });
           }
         }

@@ -99,31 +99,28 @@ export default function Game() {
         id: string;
         score: number;
         username: string;
+        killedUsername?: string;
+        deathType?: string;
       }) => {
         console.log("Game: scoreUpdated event received", data);
         updatePlayersList(client);
 
         // Get names for notification
         const killerName = data.username;
-        let victimName = "someone";
+        let victimName = data.killedUsername || "someone";
 
-        // Find the name of the current player if they were killed
-        if (client.currentPlayer && client.currentPlayer.id !== data.id) {
-          victimName = client.currentPlayer.username;
-        }
-
-        // Find another player's name if available
-        for (const player of client.players.values()) {
-          if (player.id !== data.id && player.id !== client.currentPlayer?.id) {
-            victimName = player.username;
-            break;
-          }
+        // Format message based on death type
+        let message = `${killerName} eliminated ${victimName}!`;
+        
+        // If it's a trail kill, customize the message
+        if (data.deathType === "trail") {
+          message = `${victimName} crashed into ${killerName}'s light trail!`;
         }
 
         // Add a kill notification
         const notification: GameNotification = {
           id: `kill-${Date.now()}`,
-          message: `${killerName} eliminated ${victimName}!`,
+          message,
           timestamp: Date.now(),
         };
 
@@ -221,7 +218,7 @@ export default function Game() {
 
     // Track last render time for framerate limiting
     let lastRenderTime = 0;
-    const targetFPS = 30; // Limit to 30 FPS for smoother, less flickery animation
+    const targetFPS = 25; // Limit to 25 FPS for better performance
     const frameInterval = 1000 / targetFPS;
 
     // Animation loop with framerate limiting
@@ -238,13 +235,18 @@ export default function Game() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw ground/background
-      ctx.fillStyle = "#3a3a3a";
+      ctx.fillStyle = "#1a1a2a"; // Darker background for better trail visibility
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Sort players by Y position so characters in front are drawn on top
       const sortedPlayers = Array.from(gameClient.players.values()).sort(
         (a, b) => a.y - b.y
       );
+      
+      // Only debug log occasionally to reduce console spam
+      if (sortedPlayers.length > 0 && Math.random() < 0.001) {
+        console.log("Player trails active:", sortedPlayers.some(p => p.trail && p.trail.length > 0));
+      }
 
       // Draw players
       sortedPlayers.forEach((player) => {
@@ -300,7 +302,8 @@ export default function Game() {
           isInvincible,
           isVisible,
           player.id,
-          player.color // Pass the player's color for the circle
+          player.color, // Pass the player's color for the circle
+          player.trail // Pass the player's trail segments
         );
 
         // Draw username
@@ -415,6 +418,11 @@ export default function Game() {
               className="w-full px-4 py-2 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your username"
               autoComplete="off"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && username.trim() !== '') {
+                  handleJoin();
+                }
+              }}
             />
           </div>
           <button

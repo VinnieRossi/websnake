@@ -19,7 +19,7 @@ export class GameClient {
   moveSpeed: number = 10;
   isMoving: boolean = false;
   lastMovementUpdate: number = 0;
-  movementUpdateInterval: number = 30; // Send updates every 30ms for smoother movement
+  movementUpdateInterval: number = 50; // Send updates every 50ms (reduced for performance)
 
   // Collision and respawn
   isDead: boolean = false;
@@ -72,6 +72,11 @@ export class GameClient {
         if (!("invincibleUntil" in player)) {
           player.invincibleUntil = 0; // No invincibility for existing players by default
         }
+        
+        // Initialize trail if it doesn't exist
+        if (!player.trail) {
+          player.trail = [];
+        }
 
         this.players.set(player.id, player);
       });
@@ -85,6 +90,11 @@ export class GameClient {
       // Ensure the player has the invincibleUntil property
       if (!("invincibleUntil" in player)) {
         player.invincibleUntil = Date.now() + 2000; // 2 seconds initial invincibility
+      }
+      
+      // Initialize trail if it doesn't exist
+      if (!player.trail) {
+        player.trail = [];
       }
 
       this.players.set(player.id, player);
@@ -101,6 +111,7 @@ export class GameClient {
         direction?: "up" | "down" | "left" | "right";
         isMoving?: boolean;
         invincibleUntil?: number;
+        trail?: { x: number; y: number; timestamp: number }[];
       }) => {
         const player = this.players.get(data.id);
         if (player) {
@@ -120,6 +131,11 @@ export class GameClient {
           if (data.invincibleUntil !== undefined) {
             player.invincibleUntil = data.invincibleUntil;
           }
+          
+          // Update trail if provided
+          if (data.trail) {
+            player.trail = data.trail;
+          }
 
           this.triggerEvent("playerMoved", {
             id: data.id,
@@ -128,6 +144,7 @@ export class GameClient {
             direction: player.direction,
             isMoving: player.isMoving,
             invincibleUntil: player.invincibleUntil,
+            trail: player.trail
           });
         } else {
           console.warn("Received movement for unknown player:", data.id);
@@ -140,7 +157,7 @@ export class GameClient {
     // Player died
     this.socket.on(
       "playerDied",
-      (data: { id: string; username?: string; timestamp?: number }) => {
+      (data: { id: string; username?: string; timestamp?: number; deathType?: string }) => {
         console.log(
           `DEATH EVENT FROM SERVER: Player ${
             data.username || data.id
@@ -153,6 +170,11 @@ export class GameClient {
 
           // Set local death state - will be reset by respawn
           this.isDead = true;
+          
+          // Ensure trail is cleared immediately
+          if (this.currentPlayer) {
+            this.currentPlayer.trail = [];
+          }
 
           // Safety - reset death state after 5 seconds if no respawn received
           setTimeout(() => {
@@ -166,10 +188,15 @@ export class GameClient {
           const player = this.players.get(data.id);
           if (player) {
             console.log(`Other player ${player.username} died`);
+            
+            // Clear their trail immediately
+            player.trail = [];
+            
             // Trigger event for UI updates if needed
             this.triggerEvent("playerDied", {
               id: data.id,
               username: player.username,
+              deathType: data.deathType
             });
           }
         }
@@ -370,6 +397,34 @@ export class GameClient {
     isMoving?: boolean
   ) {
     if (this.currentPlayer) {
+      // Always ensure the trail array exists
+      if (!this.currentPlayer.trail) {
+        this.currentPlayer.trail = [];
+        console.log("Initialized trail array for player");
+      }
+      
+      // Update trail if player is moving
+      if (isMoving) {
+        // Add current position to trail before updating to new position
+        // Always add a point to test if trails are working
+        this.currentPlayer.trail.push({
+          x: this.currentPlayer.x,
+          y: this.currentPlayer.y,
+          timestamp: Date.now()
+        });
+        
+        // Only log occasionally to avoid console spam
+        if (Math.random() < 0.01) {
+          console.log(`Added trail point at (${this.currentPlayer.x},${this.currentPlayer.y}), trail length: ${this.currentPlayer.trail.length}`);
+        }
+        
+        // Keep the trail at a reasonable length (40 segments)
+        if (this.currentPlayer.trail.length > 40) {
+          this.currentPlayer.trail = this.currentPlayer.trail.slice(-40);
+        }
+      }
+      
+      // Update position
       this.currentPlayer.x = x;
       this.currentPlayer.y = y;
 
@@ -390,13 +445,14 @@ export class GameClient {
         this.currentPlayer.invincibleUntil = 0;
       }
 
-      // Send to server
+      // Send to server (including trail)
       this.socket.emit("move", {
         x,
         y,
         direction: this.currentPlayer.direction,
         isMoving: this.currentPlayer.isMoving,
         invincibleUntil: this.currentPlayer.invincibleUntil,
+        trail: this.currentPlayer.trail
       });
 
       // Trigger local event
@@ -407,6 +463,7 @@ export class GameClient {
         direction: this.currentPlayer.direction,
         isMoving: this.currentPlayer.isMoving,
         invincibleUntil: this.currentPlayer.invincibleUntil,
+        trail: this.currentPlayer.trail
       });
     }
   }
@@ -483,7 +540,7 @@ export class GameClient {
     }
   }
 
-  // Collision detection - only the player who initiates the collision should die
+  // Collision detection - check both player collisions and trail collisions
   checkCollisions() {
     // 1. Only check if we have a player and we're not dead
     if (!this.currentPlayer || this.isDead) return false;
@@ -491,7 +548,32 @@ export class GameClient {
     // 2. Skip if invincible - we can't die when invincible
     if (Date.now() < this.currentPlayer.invincibleUntil) return false;
 
-    // 3. Loop through all players and check distance
+    // First check: Player-to-player collisions
+    if (this.checkPlayerCollisions()) {
+      // Clear trail immediately on death
+      if (this.currentPlayer) {
+        this.currentPlayer.trail = [];
+      }
+      return true;
+    }
+
+    // Second check: Player-to-trail collisions
+    if (this.checkTrailCollisions()) {
+      // Clear trail immediately on death
+      if (this.currentPlayer) {
+        this.currentPlayer.trail = [];
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  // Check for collisions with other players
+  checkPlayerCollisions() {
+    if (!this.currentPlayer) return false;
+
+    // Loop through all players and check distance
     for (const player of this.players.values()) {
       // Skip self
       if (!player || player.id === this.currentPlayer.id) continue;
@@ -509,18 +591,21 @@ export class GameClient {
         console.log(`COLLISION with ${player.username} at ${distance.toFixed(0)}px`);
 
         // Only initiate death if we moved into them (not them into us)
-        // We do this by checking if we're currently moving
         if (this.currentPlayer.isMoving) {
           console.log("I'm moving, so I'm the one who dies!");
           
           // Set temporary death flag
           this.isDead = true;
+          
+          // Clear trail immediately on client side
+          this.currentPlayer.trail = [];
 
           // Tell server I died
           this.socket.emit("killPlayer", {
             id: this.currentPlayer.id,
             killedBy: player.id,
             forced: true,
+            collisionType: "player"
           });
 
           console.log("Death message sent to server");
@@ -535,7 +620,66 @@ export class GameClient {
         }
       }
     }
+    
+    return false;
+  }
 
+  // Check for collisions with light trails
+  checkTrailCollisions() {
+    if (!this.currentPlayer || !this.currentPlayer.isMoving) return false;
+    
+    // Get our position
+    const playerX = this.currentPlayer.x;
+    const playerY = this.currentPlayer.y;
+    
+    // Trail collision radius (smaller than player collision)
+    const trailCollisionRadius = 15;
+    
+    // Check all players' trails
+    for (const player of this.players.values()) {
+      // Skip own trail (can't collide with own trail)
+      if (player.id === this.currentPlayer.id) continue;
+      
+      // Skip if player has no trail
+      if (!player.trail || player.trail.length === 0) continue;
+      
+      // Check each trail segment
+      for (const segment of player.trail) {
+        // Calculate distance to trail segment
+        const dx = segment.x - playerX;
+        const dy = segment.y - playerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If we're too close to a trail segment
+        if (distance < trailCollisionRadius) {
+          console.log(`TRAIL COLLISION with ${player.username}'s trail`);
+          
+          // Set death flag
+          this.isDead = true;
+          
+          // Clear trail immediately on client side
+          this.currentPlayer.trail = [];
+          
+          // Tell server
+          this.socket.emit("killPlayer", {
+            id: this.currentPlayer.id,
+            killedBy: player.id,
+            forced: true,
+            collisionType: "trail"
+          });
+          
+          console.log("Trail collision death message sent to server");
+          
+          // Auto-reset death flag after delay if server doesn't respond
+          setTimeout(() => {
+            this.isDead = false;
+          }, 1000);
+          
+          return true;
+        }
+      }
+    }
+    
     return false;
   }
 
@@ -554,12 +698,16 @@ export class GameClient {
 
       // Set isDead immediately
       this.isDead = true;
+      
+      // Clear trail immediately on client side
+      this.currentPlayer.trail = [];
 
       // Tell the server about this collision
       this.socket.emit("killPlayer", {
         id: this.currentPlayer.id,
         killedBy: killedById,
         forced: true, // Force handling the death
+        collisionType: "player"
       });
 
       // Trigger death event locally to update UI

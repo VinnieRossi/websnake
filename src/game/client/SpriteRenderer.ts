@@ -15,9 +15,15 @@ export class SpriteRenderer {
     isInvincible: boolean = false,
     isVisible: boolean = true,
     playerId: string = 'default',
-    color: string = '#3498db' // Default to blue if no color provided
+    color: string = '#3498db', // Default to blue if no color provided
+    trail: { x: number, y: number, timestamp: number }[] = [] // Trail segments
   ) {
-    // Skip drawing if not visible (for invincibility blinking)
+    // First draw the light trail if it exists (always draw trails regardless of player visibility)
+    if (trail && trail.length > 0) {
+      this.drawTrail(ctx, trail, color);
+    }
+    
+    // Skip drawing player if not visible (for invincibility blinking)
     if (!isVisible) {
       // Only draw a faint shadow when invisible
       this.drawShadow(ctx, x, y);
@@ -53,6 +59,67 @@ export class SpriteRenderer {
     this.drawDirectionIndicator(ctx, x, y, direction, radius);
     
     // Restore context
+    ctx.restore();
+  }
+  
+  // Draw the light trail behind the player (Tron style)
+  drawTrail(
+    ctx: CanvasRenderingContext2D, 
+    trail: { x: number, y: number, timestamp: number }[],
+    color: string
+  ) {
+    // Need at least 2 points to draw a proper trail
+    if (!trail || trail.length < 2) {
+      return;
+    }
+    
+    // Save context
+    ctx.save();
+    
+    // Draw the light trail
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Add glow effect
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+    
+    // Start at the first point
+    ctx.moveTo(trail[0].x, trail[0].y);
+    
+    // Connect all points
+    for (let i = 1; i < trail.length; i++) {
+      ctx.lineTo(trail[i].x, trail[i].y);
+    }
+    
+    // Draw the trail
+    ctx.stroke();
+    
+    // Restore context
+    ctx.restore();
+    
+    // Add a brighter core to the trail
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffffff'; // White core
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.7;
+    
+    // Start at the first point
+    ctx.moveTo(trail[0].x, trail[0].y);
+    
+    // Connect all points
+    for (let i = 1; i < trail.length; i++) {
+      ctx.lineTo(trail[i].x, trail[i].y);
+    }
+    
+    // Draw the core
+    ctx.stroke();
     ctx.restore();
   }
   
