@@ -1,4 +1,10 @@
 export class SpriteRenderer {
+  private spritesheetPath: string;
+
+  constructor(spritesheetPath: string) {
+    this.spritesheetPath = spritesheetPath;
+  }
+
   /**
    * Simple ball renderer for players
    * This replaces the sprite-based renderer completely, using colored circles instead
