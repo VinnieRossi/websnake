@@ -1,7 +1,27 @@
 import { io, Socket } from "socket.io-client";
-import { Player } from "../server/GameServer";
 
 type GameEventCallback = (data: any) => void;
+
+interface TrailSegment {
+  x: number;
+  y: number;
+  timestamp: number;
+  isInvincible: boolean;
+}
+
+interface Player {
+  id: string;
+  x: number;
+  y: number;
+  username: string;
+  color: string;
+  direction: "up" | "down" | "left" | "right";
+  spriteRow: number;
+  isMoving: boolean;
+  invincibleUntil: number;
+  score: number;
+  trail: TrailSegment[];
+}
 
 export class GameClient {
   socket: Socket;
@@ -112,7 +132,7 @@ export class GameClient {
         direction?: "up" | "down" | "left" | "right";
         isMoving?: boolean;
         invincibleUntil?: number;
-        trail?: { x: number; y: number; timestamp: number }[];
+        trail?: TrailSegment[];
       }) => {
         const player = this.players.get(data.id);
         if (player) {
@@ -994,7 +1014,7 @@ export class GameClient {
     }
   }
 
-  private triggerEvent(event: string, data: any) {
+  private triggerEvent(event: string, data: unknown) {
     const callbacks = this.eventHandlers[event] || [];
     callbacks.forEach((callback) => callback(data));
   }

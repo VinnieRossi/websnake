@@ -1,5 +1,3 @@
-import { WebSocketServer } from "ws";
-import type { NextApiRequest } from "next";
 import { NextResponse } from "next/server";
 
 // This route isn't used for HTTP requests

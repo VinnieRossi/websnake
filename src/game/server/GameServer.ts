@@ -24,6 +24,15 @@ export interface Player {
   trail: TrailSegment[]; // Trail of light segments behind the player
 }
 
+interface MoveData {
+  x: number;
+  y: number;
+  direction?: "up" | "down" | "left" | "right";
+  isMoving?: boolean;
+  invincibleUntil?: number;
+  trail?: TrailSegment[];
+}
+
 export class GameServer {
   players: Map<string, Player> = new Map();
   io: SocketIOServer;
@@ -82,7 +91,7 @@ export class GameServer {
       });
 
       // SIMPLE move handler
-      socket.on("move", (data: any) => {
+      socket.on("move", (data: MoveData) => {
         const player = this.players.get(socket.id);
         if (player) {
           // Ensure trail array exists
@@ -388,7 +397,7 @@ export class GameServer {
     return colors[Math.floor(Math.random() * colors.length)];
   }
 
-  private handleEvent(event: string, data: unknown) {
+  private handleEvent(_event: string, _data: unknown) {
     // Implementation of handleEvent method
   }
 }
