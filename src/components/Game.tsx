@@ -105,16 +105,69 @@ export default function Game() {
         console.log("Game: scoreUpdated event received", data);
         updatePlayersList(client);
 
-        // Get names for notification
-        const killerName = data.username;
-        let victimName = data.killedUsername || "someone";
-
-        // Format message based on death type
-        let message = `${killerName} eliminated ${victimName}!`;
+        // Print the complete data received for debugging
+        console.log("COMPLETE SCORE UPDATE DATA:", data);
         
-        // If it's a trail kill, customize the message
-        if (data.deathType === "trail") {
-          message = `${victimName} crashed into ${killerName}'s light trail!`;
+        // Get names for notification - explicitly separate them
+        const killerName = data.username; // This is the killer's username
+        const victimName = data.killedUsername || "someone"; // Use a default if not provided
+        
+        // ONLY use the explicit isSelfKill flag from the server
+        // This is the source of truth about whether the kill was a suicide
+        const isSelfKill = data.isSelfKill === true;
+        
+        console.log("Kill notification parsed values:", {
+          killer: killerName, 
+          victim: victimName, 
+          type: data.deathType, 
+          isSelfKill: isSelfKill,
+          areNamesEqual: killerName === victimName
+        });
+        
+        // Generate a fun, randomized message based on death type
+        let message = "";
+        
+        if (data.deathType === "trail" && !isSelfKill) {
+          // Trail collision messages - when hitting someone else's trail
+          const trailMessages = [
+            `${killerName}'s light trail eliminated ${victimName}!`,
+            `${killerName}'s trail sent ${victimName} back to the start!`,
+            `${killerName} caught ${victimName} in their light web!`,
+            `${victimName} failed to cross ${killerName}'s laser barrier!`,
+            `${killerName} scored a point when ${victimName} hit their trail!`
+          ];
+          message = trailMessages[Math.floor(Math.random() * trailMessages.length)];
+        } else if (data.deathType === "self-trail") {
+          // Self trail collision messages
+          const selfTrailMessages = [
+            `${killerName} got tangled in their own trail. Awkward!`,
+            `${killerName} played themselves in the most literal way!`,
+            `${killerName} made a maze they couldn't solve!`,
+            `${killerName} became their own worst enemy!`,
+            `${killerName} tried to bite their own tail. It didn't end well!`
+          ];
+          message = selfTrailMessages[Math.floor(Math.random() * selfTrailMessages.length)];
+        } else {
+          // Standard player collision messages
+          if (isSelfKill) {
+            const selfCollisionMessages = [
+              `${killerName} eliminated themselves in confusion!`,
+              `${killerName} defeated their own existence! How philosophical!`,
+              `${killerName} ragequit in the most dramatic way possible!`,
+              `${killerName} decided to restart from scratch!`,
+              `${killerName} accidentally pressed the self-destruct button!`
+            ];
+            message = selfCollisionMessages[Math.floor(Math.random() * selfCollisionMessages.length)];
+          } else {
+            const playerCollisionMessages = [
+              `${killerName} bumped into ${victimName} and won!`,
+              `${killerName} eliminated ${victimName} in a head-on collision!`,
+              `${killerName} sent ${victimName} flying off the grid!`,
+              `${killerName} showed ${victimName} how to play bumper cars!`,
+              `${victimName} was deleted from the game by ${killerName}!`
+            ];
+            message = playerCollisionMessages[Math.floor(Math.random() * playerCollisionMessages.length)];
+          }
         }
 
         // Add a kill notification
@@ -457,9 +510,9 @@ export default function Game() {
             {notifications.map((notification) => (
               <div
                 key={notification.id}
-                className="bg-black bg-opacity-60 text-white px-3 py-1 mb-1 rounded-lg text-sm animate-fadeIn"
+                className="bg-black bg-opacity-80 text-white px-3 py-2 mb-2 rounded-lg text-sm font-medium animate-fadeIn"
               >
-                {notification.message}
+                <span className="font-bold">{notification.message}</span>
               </div>
             ))}
           </div>

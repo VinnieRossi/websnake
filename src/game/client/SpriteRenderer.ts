@@ -18,9 +18,9 @@ export class SpriteRenderer {
     color: string = '#3498db', // Default to blue if no color provided
     trail: { x: number, y: number, timestamp: number }[] = [] // Trail segments
   ) {
-    // First draw the light trail if it exists (always draw trails regardless of player visibility)
+    // First draw the light trail if it exists - pass invincibility and visibility state
     if (trail && trail.length > 0) {
-      this.drawTrail(ctx, trail, color);
+      this.drawTrail(ctx, trail, color, isInvincible, isVisible);
     }
     
     // Skip drawing player if not visible (for invincibility blinking)
@@ -65,13 +65,23 @@ export class SpriteRenderer {
   // Draw the light trail behind the player (Tron style)
   drawTrail(
     ctx: CanvasRenderingContext2D, 
-    trail: { x: number, y: number, timestamp: number }[],
-    color: string
+    trail: { x: number, y: number, timestamp: number, isInvincible?: boolean }[],
+    color: string,
+    isInvincible: boolean = false,
+    isVisible: boolean = true
   ) {
     // Need at least 2 points to draw a proper trail
     if (!trail || trail.length < 2) {
       return;
     }
+    
+    // If player is invincible and trail should be invisible during the blink effect, skip drawing
+    if (isInvincible && !isVisible) {
+      return;
+    }
+    
+    // Track player's current invincibility status
+    const isCurrentlyInvincible = isInvincible;
     
     // Save context
     ctx.save();
@@ -83,9 +93,12 @@ export class SpriteRenderer {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    // Add glow effect
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    // Add glow effect - enhance for invincible players or invincible segments
+    // For each segment, check if it was created during invincibility
+    // If so, and the player is still invincible, use invincibility effects
+    // Otherwise, use normal effects
+    ctx.shadowColor = isCurrentlyInvincible ? '#ffffff' : color;
+    ctx.shadowBlur = isCurrentlyInvincible ? 15 : 10;
     
     // Start at the first point
     ctx.moveTo(trail[0].x, trail[0].y);
@@ -104,11 +117,11 @@ export class SpriteRenderer {
     // Add a brighter core to the trail
     ctx.save();
     ctx.beginPath();
-    ctx.strokeStyle = '#ffffff'; // White core
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = isCurrentlyInvincible ? '#00ffff' : '#ffffff'; // Cyan core for invincible, white for normal
+    ctx.lineWidth = isCurrentlyInvincible ? 3 : 2; // Slightly thicker core when invincible
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = isCurrentlyInvincible ? 0.9 : 0.7; // Brighter core when invincible
     
     // Start at the first point
     ctx.moveTo(trail[0].x, trail[0].y);

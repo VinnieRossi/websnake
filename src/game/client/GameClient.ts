@@ -405,12 +405,15 @@ export class GameClient {
       
       // Update trail if player is moving
       if (isMoving) {
+        // Check if player is currently invincible
+        const isInvincible = this.isInvincible();
+        
         // Add current position to trail before updating to new position
-        // Always add a point to test if trails are working
         this.currentPlayer.trail.push({
           x: this.currentPlayer.x,
           y: this.currentPlayer.y,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          isInvincible: isInvincible
         });
         
         // Only log occasionally to avoid console spam
@@ -635,16 +638,30 @@ export class GameClient {
     // Trail collision radius (smaller than player collision)
     const trailCollisionRadius = 15;
     
-    // Check all players' trails
+    // Check all players' trails, including our own
     for (const player of this.players.values()) {
-      // Skip own trail (can't collide with own trail)
-      if (player.id === this.currentPlayer.id) continue;
+      // For own trail, skip the most recent few segments to avoid immediate self-collision
+      // but allow colliding with older segments of our own trail
+      const skipSegments = player.id === this.currentPlayer.id ? 5 : 0;
       
       // Skip if player has no trail
       if (!player.trail || player.trail.length === 0) continue;
       
-      // Check each trail segment
-      for (const segment of player.trail) {
+      // Get the player's current invincibility status
+      const playerIsCurrentlyInvincible = Date.now() < player.invincibleUntil;
+      
+      // Skip trails of currently invincible players entirely
+      if (playerIsCurrentlyInvincible) continue;
+      
+      // Check each trail segment, skipping the newest segments for own trail
+      for (let i = 0; i < player.trail.length - skipSegments; i++) {
+        const segment = player.trail[i];
+        // Only skip invincible segments if the player is still invincible
+        // Once invincibility wears off, all trail segments become dangerous
+        if (segment.isInvincible && playerIsCurrentlyInvincible) {
+          continue;
+        }
+        
         // Calculate distance to trail segment
         const dx = segment.x - playerX;
         const dy = segment.y - playerY;
@@ -652,7 +669,12 @@ export class GameClient {
         
         // If we're too close to a trail segment
         if (distance < trailCollisionRadius) {
-          console.log(`TRAIL COLLISION with ${player.username}'s trail`);
+          // Important: When hitting someone else's trail, THEY killed YOU
+          // The killedBy should be the trail owner's ID
+          const isSelfCollision = player.id === this.currentPlayer.id;
+          
+          const trailOwnerName = isSelfCollision ? "YOUR OWN" : player.username + "'s";
+          console.log(`TRAIL COLLISION with ${trailOwnerName} trail`);
           
           // Set death flag
           this.isDead = true;
@@ -660,12 +682,27 @@ export class GameClient {
           // Clear trail immediately on client side
           this.currentPlayer.trail = [];
           
-          // Tell server
+          console.log("TRAIL KILL DETAILS:", {
+            victim: this.currentPlayer.username,
+            victimId: this.currentPlayer.id,
+            killer: player.username,
+            killerId: player.id,
+            isSelfKill: isSelfCollision
+          });
+          
+          // Tell server - include both killer and victim usernames explicitly
+          // CRITICAL: For trail collisions, the killer is the TRAIL OWNER (player)
           this.socket.emit("killPlayer", {
-            id: this.currentPlayer.id,
-            killedBy: player.id,
+            id: this.currentPlayer.id,                // ID of the player who died
+            killedBy: player.id,                      // ID of the player who killed (trail owner)
+            killerUsername: player.username,          // Username of killer (trail owner)
+            killedUsername: this.currentPlayer.username,
             forced: true,
-            collisionType: "trail"
+            collisionType: isSelfCollision ? "self-trail" : "trail",
+            isSelfKill: isSelfCollision,              // Only true if hitting your own trail
+            // One more time, make it extremely explicit
+            killerIsDeadPlayer: false,
+            deadPlayerIsKiller: false
           });
           
           console.log("Trail collision death message sent to server");
@@ -694,7 +731,9 @@ export class GameClient {
         return;
       }
 
-      console.log(`COLLISION DEATH: killed by player ${killedById}`);
+      // Check if it's self collision
+      const isSelfCollision = killedById === this.currentPlayer.id;
+      console.log(`COLLISION DEATH: killed by ${isSelfCollision ? "self" : "player " + killedById}`);
 
       // Set isDead immediately
       this.isDead = true;
@@ -702,12 +741,22 @@ export class GameClient {
       // Clear trail immediately on client side
       this.currentPlayer.trail = [];
 
-      // Tell the server about this collision
+      // Get the killer player object to include their username
+      const killerPlayer = this.players.get(killedById);
+      const killerUsername = killerPlayer ? killerPlayer.username : "Unknown";
+      
+      // Check if this is truly a self-kill (same player id)
+      const isActuallySelfKill = this.currentPlayer.id === killedById;
+      
+      // Tell the server about this collision - include both killer and victim usernames
       this.socket.emit("killPlayer", {
         id: this.currentPlayer.id,
         killedBy: killedById,
+        killerUsername: killerUsername, // Add killer username explicitly
+        killedUsername: this.currentPlayer.username,
         forced: true, // Force handling the death
-        collisionType: "player"
+        collisionType: isActuallySelfKill ? "self" : "player", // Only use 'self' if truly the same player
+        isSelfKill: isActuallySelfKill // Explicit flag for self-kills
       });
 
       // Trigger death event locally to update UI
