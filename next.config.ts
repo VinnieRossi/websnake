@@ -2,11 +2,7 @@
 const nextConfig = {
   // Enable Edge runtime for API routes
   experimental: {
-    serverComponentsExternalPackages: [
-      "socket.io",
-      "bufferutil",
-      "utf-8-validate",
-    ],
+    serverExternalPackages: ["socket.io", "bufferutil", "utf-8-validate"],
   },
   // Socket.IO needs WebSockets support
   webpack: (config: { externals: any[] }) => {

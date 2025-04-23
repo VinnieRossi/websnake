@@ -9,7 +9,7 @@ let gameServer: GameServer;
 export async function GET(req: NextRequest) {
   // This is required for WebSocket upgrade
   const { socket, response } = await (req as any).nextUrl;
-  
+
   if (!socket) {
     return new Response("WebSocket connection required", { status: 400 });
   }
@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
         methods: ["GET", "POST"],
       },
     });
-    
+
     io = socketIO;
-    
+
     // Create game server with the socket.io instance
     gameServer = new GameServer(io);
     console.log("GameServer initialized in Edge runtime");
@@ -34,10 +34,13 @@ export async function GET(req: NextRequest) {
 
   // Attach the server to the event
   (io as any).attachWebSocket(socket, req, response);
-  
+
   // WebSocket connections need to stay alive
   return new Response(null, {
     status: 101,
-    webSocket: socket,
+    headers: {
+      Upgrade: "websocket",
+      Connection: "Upgrade",
+    },
   });
 }
