@@ -94,8 +94,9 @@ export default function Game() {
         username: string;
         killedUsername?: string;
         deathType?: string;
-        isSelfKill?: boolean; // Added this field to receive explicit self-kill flag
-        killerIdMatchesVictimId?: boolean; // Added for additional self-kill checking
+        isSelfKill?: boolean;
+        killerIdMatchesVictimId?: boolean;
+        killedBy?: string;
       }) => {
         console.log("Game: scoreUpdated event received", data);
         updatePlayersList(client);
