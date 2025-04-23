@@ -24,14 +24,20 @@ export async function GET(req: NextRequest) {
           origin: "*",
           methods: ["GET", "POST"],
           credentials: false,
+          allowedHeaders: ["*"],
         },
         transports: ["websocket"],
         pingTimeout: 60000,
         pingInterval: 25000,
         connectTimeout: 45000,
         allowEIO3: true,
-        allowUpgrades: true,
+        allowUpgrades: false,
         cookie: false,
+        maxHttpBufferSize: 1e8,
+        serveClient: false,
+        allowRequest: (req, callback) => {
+          callback(null, true);
+        },
       });
 
       io = socketIO;

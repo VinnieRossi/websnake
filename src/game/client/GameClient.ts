@@ -52,7 +52,12 @@ export class GameClient {
 
   constructor() {
     // Connect to the server with explicit path for Vercel compatibility
-    this.socket = io(window.location.origin, {
+    const socketUrl =
+      process.env.NODE_ENV === "production"
+        ? window.location.origin
+        : "http://localhost:3000";
+
+    this.socket = io(socketUrl, {
       path: "/api/socket",
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -65,6 +70,9 @@ export class GameClient {
       extraHeaders: {
         "Access-Control-Allow-Origin": "*",
       },
+      upgrade: false, // Disable transport upgrading
+      rememberUpgrade: false,
+      rejectUnauthorized: false,
     });
 
     this.setupSocketListeners();

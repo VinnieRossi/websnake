@@ -5,6 +5,9 @@
     "src/app/api/socket/**": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/socket/route.ts": {
+      "runtime": "edge"
     }
   },
   "headers": [
