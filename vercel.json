@@ -1,16 +1,6 @@
 {
   "version": 2,
   "regions": ["iad1"],
-  "functions": {
-    "src/app/api/socket/**": {
-      "memory": 1024,
-      "maxDuration": 60,
-      "runtime": "edge"
-    },
-    "api/socket/route.ts": {
-      "runtime": "edge"
-    }
-  },
   "headers": [
     {
       "source": "/api/socket",
