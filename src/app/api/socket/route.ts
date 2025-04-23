@@ -23,10 +23,15 @@ export async function GET(req: NextRequest) {
         cors: {
           origin: "*",
           methods: ["GET", "POST"],
+          credentials: false,
         },
-        transports: ["websocket"], // Force WebSocket transport
-        pingTimeout: 60000, // Increase timeout for serverless environment
-        pingInterval: 25000, // Increase interval for serverless environment
+        transports: ["websocket"],
+        pingTimeout: 60000,
+        pingInterval: 25000,
+        connectTimeout: 45000,
+        allowEIO3: true,
+        allowUpgrades: true,
+        cookie: false,
       });
 
       io = socketIO;

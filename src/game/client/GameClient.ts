@@ -61,6 +61,10 @@ export class GameClient {
       transports: ["websocket"],
       forceNew: true,
       autoConnect: true,
+      withCredentials: false,
+      extraHeaders: {
+        "Access-Control-Allow-Origin": "*",
+      },
     });
 
     this.setupSocketListeners();
