@@ -4,7 +4,8 @@
   "functions": {
     "src/app/api/socket/**": {
       "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "runtime": "edge"
     },
     "api/socket/route.ts": {
       "runtime": "edge"
