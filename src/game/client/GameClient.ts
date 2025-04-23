@@ -54,20 +54,32 @@ export class GameClient {
     // Connect to the server with explicit path for Vercel compatibility
     this.socket = io(window.location.origin, {
       path: "/api/socket",
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      transports: ["websocket"]
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      transports: ["websocket"],
+      forceNew: true,
+      autoConnect: true,
     });
-    
+
     this.setupSocketListeners();
 
     // Log connection status
     this.socket.on("connect", () => {
       console.log("Connected to game server with ID:", this.socket.id);
     });
-    
+
     this.socket.on("connect_error", (err) => {
       console.error("Socket connection error:", err);
+    });
+
+    this.socket.on("disconnect", (reason) => {
+      console.log("Socket disconnected:", reason);
+      if (reason === "io server disconnect") {
+        // Server initiated disconnect, try to reconnect
+        this.socket.connect();
+      }
     });
 
     // Start collision checking immediately
