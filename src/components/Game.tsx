@@ -18,7 +18,6 @@ export default function Game() {
   const [username, setUsername] = useState("");
   const [joined, setJoined] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [isDead, setIsDead] = useState(false);
   const spriteRendererRef = useRef<SpriteRenderer | null>(null);
   const [notifications, setNotifications] = useState<GameNotification[]>([]);
 
@@ -60,12 +59,9 @@ export default function Game() {
         // If it's the current player who died
         if (data.id === client.currentPlayer?.id) {
           console.log("YOU DIED!");
-          setIsDead(true);
 
           // Auto-clear death state after 1 second in case respawn event fails
-          setTimeout(() => {
-            setIsDead(false);
-          }, 1000);
+          setTimeout(() => {}, 1000);
         }
 
         updatePlayersList(client);
@@ -78,12 +74,9 @@ export default function Game() {
         if (data.id === client.currentPlayer?.id) {
           console.log("YOU RESPAWNED!");
           // Force death state to false
-          setIsDead(false);
 
           // Make double sure we're not stuck in death state
-          setTimeout(() => {
-            setIsDead(false);
-          }, 100);
+          setTimeout(() => {}, 100);
         }
 
         updatePlayersList(client);
@@ -109,30 +102,30 @@ export default function Game() {
 
         // Print the complete data received for debugging
         console.log("COMPLETE SCORE UPDATE DATA:", data);
-        
+
         // Get names for notification - explicitly separate them
         const killerName = data.username; // This is the killer's username
         const victimName = data.killedUsername || "someone"; // Use a default if not provided
-        
+
         // ONLY use the explicit isSelfKill flag from the server
         // This is the source of truth about whether the kill was a suicide
         const isSelfKill = data.isSelfKill === true;
-        
+
         // For additional debugging: log more detailed self-kill detection info
         console.log("Kill notification details:", {
-          killer: killerName, 
-          victim: victimName, 
-          type: data.deathType, 
+          killer: killerName,
+          victim: victimName,
+          type: data.deathType,
           isSelfKillFlag: data.isSelfKill === true,
           areNamesEqual: killerName === victimName,
           // Additional checks we can use for debugging
           areIdsEqual: data.id === data.killedBy,
-          finalDecision: isSelfKill
+          finalDecision: isSelfKill,
         });
-        
+
         // Generate a fun, randomized message based on death type
         let message = "";
-        
+
         if (data.deathType === "trail" && !isSelfKill) {
           // Trail collision messages - when hitting someone else's trail
           const trailMessages = [
@@ -140,9 +133,10 @@ export default function Game() {
             `${killerName}'s trail sent ${victimName} back to the start!`,
             `${killerName} caught ${victimName} in their light web!`,
             `${victimName} failed to cross ${killerName}'s laser barrier!`,
-            `${killerName} scored a point when ${victimName} hit their trail!`
+            `${killerName} scored a point when ${victimName} hit their trail!`,
           ];
-          message = trailMessages[Math.floor(Math.random() * trailMessages.length)];
+          message =
+            trailMessages[Math.floor(Math.random() * trailMessages.length)];
         } else if (data.deathType === "self-trail") {
           // Self trail collision messages
           const selfTrailMessages = [
@@ -150,9 +144,12 @@ export default function Game() {
             `${victimName} played themselves in the most literal way!`,
             `${victimName} made a maze they couldn't solve!`,
             `${victimName} became their own worst enemy!`,
-            `${victimName} tried to bite their own tail. That's not how you win!`
+            `${victimName} tried to bite their own tail. That's not how you win!`,
           ];
-          message = selfTrailMessages[Math.floor(Math.random() * selfTrailMessages.length)];
+          message =
+            selfTrailMessages[
+              Math.floor(Math.random() * selfTrailMessages.length)
+            ];
         } else {
           // Standard player collision messages
           if (isSelfKill) {
@@ -161,18 +158,24 @@ export default function Game() {
               `${victimName} defeated their own existence! How philosophical!`,
               `${victimName} ragequit in the most dramatic way possible!`,
               `${victimName} decided to restart from scratch! Self-kills don't count for points.`,
-              `${victimName} accidentally pressed the self-destruct button!`
+              `${victimName} accidentally pressed the self-destruct button!`,
             ];
-            message = selfCollisionMessages[Math.floor(Math.random() * selfCollisionMessages.length)];
+            message =
+              selfCollisionMessages[
+                Math.floor(Math.random() * selfCollisionMessages.length)
+              ];
           } else {
             const playerCollisionMessages = [
               `${killerName} bumped into ${victimName} and won!`,
               `${killerName} eliminated ${victimName} in a head-on collision!`,
               `${killerName} sent ${victimName} flying off the grid!`,
               `${killerName} showed ${victimName} how to play bumper cars!`,
-              `${victimName} was deleted from the game by ${killerName}!`
+              `${victimName} was deleted from the game by ${killerName}!`,
             ];
-            message = playerCollisionMessages[Math.floor(Math.random() * playerCollisionMessages.length)];
+            message =
+              playerCollisionMessages[
+                Math.floor(Math.random() * playerCollisionMessages.length)
+              ];
           }
         }
 
@@ -301,10 +304,13 @@ export default function Game() {
       const sortedPlayers = Array.from(gameClient.players.values()).sort(
         (a, b) => a.y - b.y
       );
-      
+
       // Only debug log occasionally to reduce console spam
       if (sortedPlayers.length > 0 && Math.random() < 0.001) {
-        console.log("Player trails active:", sortedPlayers.some(p => p.trail && p.trail.length > 0));
+        console.log(
+          "Player trails active:",
+          sortedPlayers.some((p) => p.trail && p.trail.length > 0)
+        );
       }
 
       // Draw players
@@ -478,7 +484,7 @@ export default function Game() {
               placeholder="Enter your username"
               autoComplete="off"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && username.trim() !== '') {
+                if (e.key === "Enter" && username.trim() !== "") {
                   handleJoin();
                 }
               }}

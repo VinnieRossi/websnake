@@ -89,45 +89,48 @@ export class GameServer {
           if (!player.trail) {
             player.trail = [];
           }
-          
+
           // Always add a trail point if player is moving (simplifying for testing)
           if (data.isMoving) {
             // Check if player is currently invincible
             const isInvincible = player.invincibleUntil > Date.now();
-            
+
             // Add new trail segment at current position, marking if created during invincibility
             player.trail.push({
               x: player.x,
               y: player.y,
               timestamp: Date.now(),
-              isInvincible: isInvincible
+              isInvincible: isInvincible,
             });
-            
+
             // Only log occasionally to reduce console spam
             if (Math.random() < 0.01) {
-              console.log(`Server: Added trail point for ${player.username}, trail length: ${player.trail.length}`);
+              console.log(
+                `Server: Added trail point for ${player.username}, trail length: ${player.trail.length}`
+              );
             }
-            
+
             // Limit trail length to prevent performance issues (keep last 40 segments)
             if (player.trail.length > 40) {
               player.trail = player.trail.slice(-40);
             }
           }
-          
+
           // Update player position and state
           player.x = data.x;
           player.y = data.y;
           if (data.direction) player.direction = data.direction;
           if (data.isMoving !== undefined) player.isMoving = data.isMoving;
-          if (data.invincibleUntil) player.invincibleUntil = data.invincibleUntil;
-          
+          if (data.invincibleUntil)
+            player.invincibleUntil = data.invincibleUntil;
+
           this.players.set(socket.id, player);
-          
+
           // Add trail data to the movement update
           socket.broadcast.emit("playerMoved", {
             id: socket.id,
             ...data,
-            trail: player.trail
+            trail: player.trail,
           });
         }
       });
@@ -135,22 +138,22 @@ export class GameServer {
       // ULTRA SIMPLE death handler
       socket.on("killPlayer", (data) => {
         console.log("⚠️ KILL PLAYER EVENT RECEIVED", data);
-        
+
         const player = this.players.get(socket.id);
         if (!player) {
           console.log("Player not found for death!");
           return;
         }
-        
+
         console.log(`Player ${player.username} died, initiating respawn`);
-        
+
         // Determine the type of death for better notifications
         const deathType = data.collisionType || "player";
-        
+
         // Save the victim's username - this is always the username of the player who died
         // NOT data.killedUsername - this might be causing confusion
         const killedUsername = player.username;
-        
+
         // For debugging: Log the raw kill data
         console.log("KILL DATA RECEIVED:", {
           deathType: deathType,
@@ -158,21 +161,21 @@ export class GameServer {
           killerName: data.killerUsername,
           victimId: socket.id,
           victimName: killedUsername,
-          isSelfKill: data.isSelfKill
+          isSelfKill: data.isSelfKill,
         });
-        
+
         // 1. Broadcast death to everyone with type of death
         this.io.emit("playerDied", {
           id: socket.id,
           username: player.username,
-          deathType: deathType
+          deathType: deathType,
         });
-        
+
         // 2. Respawn at center with invincibility
         const centerX = 400;
         const centerY = 300;
         const invincibleUntil = Date.now() + 2000;
-        
+
         // 3. Update player state on server
         player.x = centerX;
         player.y = centerY;
@@ -181,50 +184,51 @@ export class GameServer {
         player.invincibleUntil = invincibleUntil;
         player.trail = []; // Clear the trail on respawn
         this.players.set(socket.id, player);
-        
+
         // 4. Tell the player they died and respawned
         socket.emit("selfRespawn", {
           x: centerX,
           y: centerY,
-          invincibleUntil: invincibleUntil
+          invincibleUntil: invincibleUntil,
         });
-        
+
         // 5. Tell everyone about the respawn
         this.io.emit("serverRespawn", {
           id: socket.id,
           x: centerX,
           y: centerY,
-          invincibleUntil: invincibleUntil
+          invincibleUntil: invincibleUntil,
         });
-        
+
         // Always give the killer a point, even in self-kills for debugging
         // This ensures we get a kill message regardless
         const killerUsername = data.killerUsername || "Unknown";
-        
+
         // For testing: Log the exact killer info for debugging
         console.log("KILL ATTRIBUTION:", {
-            killedBy: data.killedBy,
-            killerUsername: killerUsername,
-            killedUsername: killedUsername,
-            deathType: deathType,
-            isSelf: data.killedBy === socket.id
+          killedBy: data.killedBy,
+          killerUsername: killerUsername,
+          killedUsername: killedUsername,
+          deathType: deathType,
+          isSelf: data.killedBy === socket.id,
         });
-        
+
         // First, determine if this is a self-kill using multiple comprehensive checks:
         // 1. Explicit isSelfKill flag from client (primary source of truth)
         // 2. Same ID for killer and victim
         // 3. Self-trail or self collision type
         // 4. Check if killedBy is missing or matches socket.id
         // 5. Use the redundant flags we added for additional verification
-        const isSelfKill = data.isSelfKill === true || 
-                          data.killedBy === socket.id || 
-                          data.collisionType === "self-trail" || 
-                          data.collisionType === "self" ||
-                          !data.killedBy || // Missing killedBy should count as self-kill
-                          data.killerIsDeadPlayer === true ||
-                          data.deadPlayerIsKiller === true ||
-                          data.killerIdMatchesVictimId === true;
-        
+        const isSelfKill =
+          data.isSelfKill === true ||
+          data.killedBy === socket.id ||
+          data.collisionType === "self-trail" ||
+          data.collisionType === "self" ||
+          !data.killedBy || // Missing killedBy should count as self-kill
+          data.killerIsDeadPlayer === true ||
+          data.deadPlayerIsKiller === true ||
+          data.killerIdMatchesVictimId === true;
+
         console.log("SELF-KILL DETECTION:", {
           isSelfKillFlag: data.isSelfKill === true,
           sameIds: data.killedBy === socket.id,
@@ -236,24 +240,26 @@ export class GameServer {
           deadPlayerIsKiller: data.deadPlayerIsKiller === true,
           killerIdMatchesVictimId: data.killerIdMatchesVictimId === true,
           // Final decision
-          finalDecision: isSelfKill
+          finalDecision: isSelfKill,
         });
-        
+
         // MOST CRITICAL CHECK: Is the killer and victim the same player?
         // This is the absolute definitive check before any scoring logic
         const samePlayer = data.killedBy === socket.id;
-        
+
         console.log("DEFINITIVE SELF-KILL CHECK:", {
           killerID: data.killedBy,
           victimID: socket.id,
           areSame: samePlayer,
-          originalSelfKillFlag: isSelfKill
+          originalSelfKillFlag: isSelfKill,
         });
-        
+
         if (samePlayer) {
           // This is DEFINITELY a self-kill - completely override any other logic
-          console.log(`DEFINITIVE SELF-KILL by ${player.username} - NO POINTS AWARDED`);
-          
+          console.log(
+            `DEFINITIVE SELF-KILL by ${player.username} - NO POINTS AWARDED`
+          );
+
           // Send notification with explicitly no score change
           const selfKillData = {
             id: socket.id,
@@ -261,10 +267,13 @@ export class GameServer {
             username: player.username,
             killedUsername: player.username,
             deathType: deathType,
-            isSelfKill: true // Always mark as self-kill
+            isSelfKill: true, // Always mark as self-kill
           };
-          
-          console.log("EMITTING DEFINITIVE SELF-KILL NOTIFICATION:", selfKillData);
+
+          console.log(
+            "EMITTING DEFINITIVE SELF-KILL NOTIFICATION:",
+            selfKillData
+          );
           this.io.emit("scoreUpdated", selfKillData);
         }
         // Not a self-kill (different players)
@@ -273,16 +282,18 @@ export class GameServer {
           const killer = this.players.get(data.killedBy);
           if (killer) {
             // Last chance comprehensive check
-            const anyPossibleSelfKill = 
+            const anyPossibleSelfKill =
               isSelfKill || // Any earlier self-kill detection
               killer.id === socket.id || // Redundant ID check
               data.isSelfKill === true || // Explicit flag
               data.killerIsDeadPlayer === true || // Additional flag
               data.deadPlayerIsKiller === true || // Additional flag
               data.killerIdMatchesVictimId === true; // Additional flag
-              
+
             if (anyPossibleSelfKill) {
-              console.log("FINAL SAFETY CHECK CAUGHT POTENTIAL SELF-KILL - NO POINTS AWARDED");
+              console.log(
+                "FINAL SAFETY CHECK CAUGHT POTENTIAL SELF-KILL - NO POINTS AWARDED"
+              );
               // Send notification with no score change
               const safetyKillData = {
                 id: data.killedBy,
@@ -290,7 +301,7 @@ export class GameServer {
                 username: killer.username,
                 killedUsername: killedUsername,
                 deathType: deathType,
-                isSelfKill: true // Mark as self-kill for message handling
+                isSelfKill: true, // Mark as self-kill for message handling
               };
               console.log("EMITTING SAFETY-CAUGHT SELF-KILL:", safetyKillData);
               this.io.emit("scoreUpdated", safetyKillData);
@@ -298,8 +309,10 @@ export class GameServer {
               // ONLY NOW award points - 100% confirmed not a self-kill
               killer.score += 1;
               this.players.set(data.killedBy, killer);
-              console.log(`LEGITIMATE KILL - Awarding point to ${killer.username} (ID: ${killer.id})`);
-              
+              console.log(
+                `LEGITIMATE KILL - Awarding point to ${killer.username} (ID: ${killer.id})`
+              );
+
               // For logging, create the kill data
               const killData = {
                 id: data.killedBy,
@@ -307,19 +320,23 @@ export class GameServer {
                 username: killer.username,
                 killedUsername: killedUsername,
                 deathType: deathType,
-                isSelfKill: false // Definitely not a self-kill
+                isSelfKill: false, // Definitely not a self-kill
               };
-              
+
               console.log("EMITTING LEGITIMATE KILL NOTIFICATION:", killData);
               this.io.emit("scoreUpdated", killData);
             }
           } else {
-            console.log(`Killer not found for ID: ${data.killedBy} - no points awarded`);
+            console.log(
+              `Killer not found for ID: ${data.killedBy} - no points awarded`
+            );
           }
         } else {
           // This is a self-kill, don't award any points
-          console.log(`Self-kill by ${player.username} (Death type: ${deathType}) - NO POINTS AWARDED`);
-          
+          console.log(
+            `Self-kill by ${player.username} (Death type: ${deathType}) - NO POINTS AWARDED`
+          );
+
           // Include the death notification but don't increment score
           const selfKillData = {
             id: socket.id,
@@ -327,11 +344,11 @@ export class GameServer {
             username: player.username, // Both killer and victim are the same person
             killedUsername: player.username, // The victim is the same as the killer for self-kills
             deathType: deathType,
-            isSelfKill: true // Explicitly mark as a self-kill
+            isSelfKill: true, // Explicitly mark as a self-kill
           };
-          
+
           console.log("EMITTING SELF-KILL DATA (NO POINTS):", selfKillData);
-          
+
           this.io.emit("scoreUpdated", selfKillData);
         }
       });
@@ -350,12 +367,28 @@ export class GameServer {
   getRandomColor(): string {
     // Define a palette of distinct colors
     const colors = [
-      "#FF5733", "#33FF57", "#3357FF", "#FF33F5", 
-      "#F5FF33", "#33FFF5", "#F533FF", "#FF3333",
-      "#7D3C98", "#2ECC71", "#F1C40F", "#E74C3C",
-      "#3498DB", "#1ABC9C", "#F39C12", "#8E44AD",
+      "#FF5733",
+      "#33FF57",
+      "#3357FF",
+      "#FF33F5",
+      "#F5FF33",
+      "#33FFF5",
+      "#F533FF",
+      "#FF3333",
+      "#7D3C98",
+      "#2ECC71",
+      "#F1C40F",
+      "#E74C3C",
+      "#3498DB",
+      "#1ABC9C",
+      "#F39C12",
+      "#8E44AD",
     ];
-    
+
     return colors[Math.floor(Math.random() * colors.length)];
+  }
+
+  private handleEvent(event: string, data: unknown) {
+    // Implementation of handleEvent method
   }
 }
